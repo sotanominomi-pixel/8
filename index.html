@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>N Clock — Full</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#ffffff">
+
+<style>
+  :root{
+    --bg-light:#ffffff;
+    --text-light:#000000;
+    --accent:#0a84ff;
+    --muted:#666;
+    --shadow: 0 6px 18px rgba(10,10,10,0.08);
+  }
+
+  /* Dark/Light auto */
+  @media (prefers-color-scheme: dark) {
+    :root{
+      --bg-light:#000;
+      --text-light:#fff;
+      --accent:#0a84ff;
+      --muted:#888;
+    }
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    background:var(--bg-light);
+    color:var(--text-light);
+  }
+
+  /* Layout */
+  .wrap {
+    min-height:100vh;
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    gap:18px;
+  }
+
+  /* big time display (shared size) */
+  .time-display {
+    font-weight:600;
+    font-size: calc(24px + 8vw); /* responsive */
+    line-height:1;
+    letter-spacing:2px;
+  }
+
+  /* slider area */
+  .slider-box {
+    width: min(760px, 96%);
+  }
+  .label-row {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+    font-size:16px;
+    color:var(--muted);
+  }
+
+  /* single thick track & single thumb black */
+  input[type="range"]{
+    -webkit-appearance:none;
+    width:100%;
+    height:14px;
+    border-radius:10px;
+    background: linear-gradient(90deg, rgba(10,10,10,0.08), rgba(10,10,10,0.08));
+    outline:none;
+    padding:0;
+    margin:0;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{
+    height:14px;
+    background: #e6e6e6;
+    border-radius:10px;
+  }
+  input[type="range"]::-moz-range-track{
+    height:14px;
+    background:#e6e6e6;
+    border-radius:10px;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:36px;height:36px;border-radius:50%;
+    background: #000; /* 黒いつまみ */
+    border:4px solid white; box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+    margin-top:-11px; /* center the thumb */
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:36px;height:36px;border-radius:50%;
+    background:#000;border:4px solid white; box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  }
+
+  /* tab (segmented) */
+  .tabs {
+    display:flex;
+    gap:8px;
+    background: rgba(0,0,0,0.04);
+    padding:6px;
+    border-radius:14px;
+    box-shadow:var(--shadow);
+  }
+  .tabs button{
+    background:transparent;
+    border:none;
+    padding:12px 22px;
+    border-radius:10px;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--text-light);
+    transition: all .15s;
+  }
+  .tabs button.active{
+    background:var(--text-light);
+    color:var(--bg-light);
+    box-shadow: 0 6px 18px rgba(10,10,10,0.08);
+  }
+
+  /* controls (stopwatch) */
+  .controls {
+    display:flex;
+    gap:16px;
+    align-items:center;
+    justify-content:center;
+    margin-top:6px;
+  }
+  .btn-circle{
+    width:88px; height:88px; border-radius:50%;
+    display:inline-grid; place-items:center;
+    font-weight:700; font-size:16px; color:white; border:none;
+    box-shadow: 0 10px 30px rgba(10,10,10,0.08);
+    cursor:pointer;
+  }
+  .btn-start{ background: #34c759; } /* green */
+  .btn-stop { background: #ff3b30; }
+  .btn-lap { background: #f2f2f2; color:var(--text-light); border:1px solid #ddd; width:64px; height:64px; font-size:14px; border-radius:12px; }
+  .btn-reset { background:#e6e6e6; color:var(--text-light); border:1px solid #ddd; width:64px; height:64px; font-size:14px; border-radius:12px; }
+
+  /* lap list */
+  .laps {
+    width: min(760px, 96%);
+    max-height:220px;
+    overflow:auto;
+    margin-top:12px;
+    border-top:1px solid rgba(0,0,0,0.06);
+    padding-top:10px;
+  }
+  .lap-item{
+    display:flex; justify-content:space-between; padding:8px 6px; font-size:15px; color:var(--muted);
+  }
+
+  /* small footer */
+  .footer { font-size:13px; color:var(--muted); margin-top:8px; }
+
+  /* responsive tweak */
+  @media (max-width:420px){
+    .btn-circle{ width:72px;height:72px;font-size:14px;}
+    .time-display { font-size: calc(30px + 12vw); }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="display" class="time-display">00:00:00</div>
+
+    <!-- slider -->
+    <div class="slider-box">
+      <div class="label-row">
+        <div>1日の長さ</div>
+        <div id="labelHours">24 時間</div>
+      </div>
+      <input id="sliderHours" type="range" min="12" max="48" step="1" value="24">
+    </div>
+
+    <!-- tabs -->
+    <div class="tabs" role="tablist" aria-label="mode">
+      <button id="tabClock" class="active">時計</button>
+      <button id="tabStopwatch">ストップウォッチ</button>
+    </div>
+
+    <!-- stopwatch controls (hidden for clock mode) -->
+    <div id="stopwatchArea" style="display:none; margin-top:12px; text-align:center;">
+      <div class="controls">
+        <button id="startBtn" class="btn-circle btn-start">Start</button>
+        <button id="lapBtn" class="btn-lap" disabled>Lap</button>
+        <button id="resetBtn" class="btn-reset" disabled>Reset</button>
+      </div>
+
+      <div class="laps" id="laps"></div>
+    </div>
+
+    <div class="footer">設定は自動で保存されます。</div>
+  </div>
+
+<script>
+/* ========== state & restore ========== */
+const slider = document.getElementById('sliderHours');
+const labelHours = document.getElementById('labelHours');
+const display = document.getElementById('display');
+const tabClock = document.getElementById('tabClock');
+const tabStopwatch = document.getElementById('tabStopwatch');
+const stopwatchArea = document.getElementById('stopwatchArea');
+const startBtn = document.getElementById('startBtn');
+const lapBtn = document.getElementById('lapBtn');
+const resetBtn = document.getElementById('resetBtn');
+const lapsDiv = document.getElementById('laps');
+
+let customHours = Number(localStorage.getItem('nclock_hours')) || 24;
+slider.value = customHours;
+labelHours.textContent = `${customHours} 時間`;
+
+let mode = localStorage.getItem('nclock_mode') || 'clock';
+if(mode==='stopwatch'){ tabClock.classList.remove('active'); tabStopwatch.classList.add('active'); stopwatchArea.style.display='block'; }
+else { tabStopwatch.classList.remove('active'); tabClock.classList.add('active'); stopwatchArea.style.display='none'; }
+
+/* stopwatch state */
+let running = false;
+let elapsedMs = Number(localStorage.getItem('nclock_sw_elapsed')) || 0; // milliseconds
+let lastPerf = null;
+let laps = JSON.parse(localStorage.getItem('nclock_sw_laps')||'[]');
+renderLaps();
+
+/* save helper */
+function saveSettings(){ localStorage.setItem('nclock_hours', String(customHours)); localStorage.setItem('nclock_mode', mode); localStorage.setItem('nclock_sw_elapsed', String(elapsedMs)); localStorage.setItem('nclock_sw_laps', JSON.stringify(laps)); }
+
+/* slider */
+slider.addEventListener('input', e=>{
+  customHours = Number(e.target.value);
+  labelHours.textContent = `${customHours} 時間`;
+  saveSettings();
+});
+
+/* tabs */
+tabClock.addEventListener('click', ()=>{ mode='clock'; tabClock.classList.add('active'); tabStopwatch.classList.remove('active'); stopwatchArea.style.display='none'; saveSettings(); });
+tabStopwatch.addEventListener('click', ()=>{ mode='stopwatch'; tabStopwatch.classList.add('active'); tabClock.classList.remove('active'); stopwatchArea.style.display='block'; saveSettings(); });
+
+/* stopwatch buttons */
+startBtn.addEventListener('click', ()=>{
+  if(!running){
+    running = true;
+    lastPerf = performance.now();
+    startBtn.textContent = 'Stop';
+    startBtn.classList.remove('btn-start'); startBtn.classList.add('btn-stop');
+    lapBtn.disabled = false; resetBtn.disabled = true;
+  } else {
+    // stop
+    running = false;
+    startBtn.textContent = 'Start';
+    startBtn.classList.remove('btn-stop'); startBtn.classList.add('btn-start');
+    lapBtn.disabled = true; resetBtn.disabled = false;
+    saveSettings();
+  }
+});
+
+lapBtn.addEventListener('click', ()=>{
+  // lap record current displayed time (integer seconds)
+  const txt = display.textContent;
+  laps.unshift(txt);
+  if(laps.length>50) laps.pop();
+  renderLaps();
+  saveSettings();
+});
+
+resetBtn.addEventListener('click', ()=>{
+  elapsedMs = 0;
+  laps = [];
+  renderLaps();
+  resetBtn.disabled = true;
+  saveSettings();
+});
+
+/* render laps */
+function renderLaps(){
+  if(laps.length===0){ lapsDiv.innerHTML = '<div style="color:var(--muted); padding:8px;">ラップなし</div>'; return;}
+  lapsDiv.innerHTML = laps.map((t,i)=>`<div class="lap-item"><div>Lap ${laps.length - i}</div><div>${t}</div></div>`).join('');
+}
+
+/* time calculation */
+/* We compute a 'virtual' epoch seconds from real Date + customHours speed.
+   Use high-resolution timing for smooth seconds movement. */
+
+function getVirtualTotalSeconds(realNowMs){
+  // realNowMs: milliseconds since page load reference (performance.now)
+  // We want to compute virtual seconds based on current real time (Date.now)
+  const realDate = new Date();
+  const realSecondsOfDay = realDate.getHours()*3600 + realDate.getMinutes()*60 + realDate.getSeconds() + realDate.getMilliseconds()/1000;
+  const speed = 24 / customHours;
+  return realSecondsOfDay * speed + ( (performance.now() - realNowMs)/1000 ) * speed;
+}
+
+/* Smooth animation loop */
+let lastFrameRef = performance.now();
+function tick(now){
+  // update stopwatch elapsed
+  if(running){
+    const dt = now - lastPerf; // ms since lastPerf
+    // Add scaled milliseconds
+    elapsedMs += dt * (24 / customHours);
+    lastPerf = now;
+  }
+
+  // display
+  if(mode==='clock'){
+    // use real Date (but with speed applied)
+    const realDate = new Date();
+    const realSecondsOfDay = realDate.getHours()*3600 + realDate.getMinutes()*60 + realDate.getSeconds() + realDate.getMilliseconds()/1000;
+    const speed = 24 / customHours;
+    const virtualSeconds = realSecondsOfDay * speed;
+    const h = Math.floor(virtualSeconds/3600) % 24;
+    const m = Math.floor(virtualSeconds/60) % 60;
+    const s = Math.floor(virtualSeconds) % 60;
+    display.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  } else {
+    // stopwatch: elapsedMs is already in virtual milliseconds
+    const totalSec = Math.floor(elapsedMs / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor(totalSec / 60) % 60;
+    const s = totalSec % 60;
+    display.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  lastFrameRef = now;
+  requestAnimationFrame(tick);
+}
+
+// load saved state
+(function initSaved(){
+  // elapsedMs restored already; ensure display consistent
+  renderLaps();
+  requestAnimationFrame(tick);
+})();
+
+/* save periodically */
+setInterval(saveSettings, 2000);
+
+/* register service worker for PWA (optional) */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{/* ignore */});
+}
+</script>
+</body>
+</html>
